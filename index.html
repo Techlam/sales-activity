@@ -9,7 +9,7 @@
    SETUP AND DISPLAY SETTINGS
    ============================================================ */
 
-// Paste your Apps Script web app URL here (Deploy > Manage deployments > URL).
+// Apps Script web app URL (the data service).
 var API_URL = "https://script.google.com/macros/s/AKfycbx6dHztswJgd2AhvcjoKRWu5pknh1eOQAQSx1kq6gBMJO2JTUGxIAQXaLtk5UD9_LHuAQ/exec";
 
 // Default columns when someone first opens the page. Viewers can change
@@ -35,13 +35,12 @@ var TEXT = {
   unlock: "Unlock costs",
   edit: "Edit costs",
   lock: "Lock",
-  tabs: { today: "Today", week: "This week", month: "This month", year: "This year" },
+  tabs: { today: "Today", week: "This week", month: "This month", year: "This year", custom: "Date range" },
   headings: {
     today: "Today",
     week: "This week (Mon to today)",
     month: "Month to date",
-    year: "Year to date",
-    matrix: "Monthly breakdown (phone calls &middot; meetings)"
+    year: "Year to date"
   }
 };
 
@@ -72,6 +71,8 @@ h1{font-size:clamp(22px,3.4vw,32px);font-weight:700;letter-spacing:-.01em;color:
 .tab.active{background:var(--black);border-color:var(--black);color:#fff;border-bottom:3px solid var(--yellow);font-weight:700}
 .right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .stamp{font-size:12px;color:var(--muted)}
+.metaline{font-size:12px;color:var(--muted);margin-top:10px}
+.print-only{display:none}
 .btn{border:none;background:var(--yellow);color:var(--black);padding:9px 18px;border-radius:3px;font:700 13px "Helvetica Neue",Helvetica,Arial,sans-serif;cursor:pointer;text-decoration:none;display:inline-block}
 .btn:hover{background:#E5A428}
 .btn.ghost{background:var(--card);border:1px solid var(--line);color:var(--ink);font-weight:500}
@@ -80,6 +81,7 @@ h1{font-size:clamp(22px,3.4vw,32px);font-weight:700;letter-spacing:-.01em;color:
 .chip{border:1px solid var(--line);background:var(--card);padding:6px 14px;border-radius:14px;font:500 12px "Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--muted);cursor:pointer}
 .chip.on{background:var(--black);border-color:var(--black);color:#fff;font-weight:700}
 .chip.blocked{opacity:.45;cursor:not-allowed;text-decoration:line-through}
+.dinput{border:1px solid var(--line);border-radius:3px;padding:7px 10px;font:400 13px "Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink);background:var(--card)}
 .card{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--yellow);border-radius:3px;padding:4px 0;overflow-x:auto;margin-top:14px}
 table{width:100%;border-collapse:collapse;min-width:620px}
 th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--bluedeep);font-weight:700;text-align:right;padding:12px 14px;border-bottom:2px solid var(--black)}
@@ -111,10 +113,17 @@ td.dim,span.dim{color:var(--muted)}
 .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .modal .msg{font-size:12px;color:var(--bronze);min-height:16px;margin-top:8px}
 @media print{
+  @page{size:A4 landscape;margin:12mm}
   .no-print{display:none !important}
+  .print-only{display:block;font-size:12px;color:#555;margin-top:6px}
   body{background:#fff;padding:0}
-  .card{border:1px solid #bbb;border-top:3px solid #bbb;overflow:visible}
+  .logo{height:40px;margin-bottom:10px}
+  h1{font-size:22px}
+  .card{border:1px solid #bbb;border-top:3px solid #bbb;overflow:visible;margin-top:10px}
+  .section-h{margin-top:16px}
   table{min-width:0}
+  th{border-bottom-color:#333}
+  tr.total td{border-top-color:#333}
   tbody tr:hover td{background:transparent}
   .wrap{max-width:none}
 }
@@ -126,21 +135,32 @@ td.dim,span.dim{color:var(--muted)}
     <img class="logo" src="https://techlam.nz/wp-content/themes/techlam/img/Techlam_Logo-2025.svg" alt="Techlam" onerror="this.style.display='none'">
     <div class="eyebrow"><b>//</b> <span id="eyebrowText"></span></div>
     <h1 id="pageTitle"></h1>
-    <div class="chev" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="print-only" id="printMeta"></div>
     <div class="topbar no-print">
       <div class="tabs" id="tabs">
         <button class="tab active" data-v="today"></button>
         <button class="tab" data-v="week"></button>
         <button class="tab" data-v="month"></button>
         <button class="tab" data-v="year"></button>
+        <button class="tab" data-v="custom"></button>
       </div>
       <div class="right">
-        <span class="stamp">Data as at <span id="stamp">&hellip;</span> NZT</span>
         <button class="btn ghost" id="printBtn"></button>
         <button class="btn ghost" id="costBtn"></button>
+        <button class="btn ghost" id="lockBtn" style="display:none"></button>
         <button class="btn" id="refreshBtn"></button>
       </div>
     </div>
+    <div class="selbar no-print" id="dateBar" style="display:none">
+      <span class="lbl">Range</span>
+      <input type="date" id="dateFrom" class="dinput">
+      <span class="stamp">to</span>
+      <input type="date" id="dateTo" class="dinput">
+      <button class="btn ghost" id="dateApply">Apply</button>
+      <button class="btn ghost" id="histBtn" style="display:none"></button>
+      <span class="stamp" id="histNote"></span>
+    </div>
+    <div class="metaline no-print">Data as at <span id="stamp">&hellip;</span> NZT</div>
     <div class="selbar no-print"><span class="lbl">Team</span><span id="repChips"></span></div>
     <div class="selbar no-print"><span class="lbl">Columns</span><span id="typeChips"></span></div>
   </header>
@@ -161,7 +181,7 @@ var selectedReps = null; // null = all; otherwise array of ownerIds
 try {
   var sc = JSON.parse(localStorage.getItem("tl_cols") || "null");
   if (sc && sc.length) selectedTypes = sc.filter(function(k){ return ALL_TYPES.indexOf(k) >= 0; });
-  PIN = localStorage.getItem("tl_pin") || null;
+  PIN = sessionStorage.getItem("tl_pin") || null; // session only: costs re-lock when the tab closes
 } catch (e) {}
 
 /* ---- API ---- */
@@ -182,7 +202,7 @@ function load(fresh){
     .then(function(res){
       if (!res.ok) throw new Error(res.error || "Unknown API error");
       D = res;
-      if (res.pinValid === false){ PIN = null; COSTS = null; try{localStorage.removeItem("tl_pin");}catch(e){} }
+      if (res.pinValid === false){ PIN = null; COSTS = null; try{sessionStorage.removeItem("tl_pin");}catch(e){} }
       if (res.costs) COSTS = res.costs;
       if (selectedReps === null) selectedReps = D.reps.map(function(r){ return r.id; });
       document.getElementById("stamp").textContent = D.fetched;
@@ -212,7 +232,30 @@ function bounds(v){
   if(v==="today") return [TODAY,TODAY];
   if(v==="week")  return [WEEK_START,TODAY];
   if(v==="month") return [MONTH_START,TODAY];
+  if(v==="custom") return [customFrom, customTo];
   return [YEAR_START,TODAY];
+}
+// Custom range, defaults to month to date. Pickers are clamped to the
+// earliest year currently loaded (this year, or last year once history
+// has been loaded via the Include button).
+var customFrom = MONTH_START, customTo = TODAY;
+function dataMin(){ return ((D && D.yearMin) || TODAY.slice(0,4)) + "-01-01"; }
+function fmtDay(s){
+  return new Date(s+"T00:00:00Z").toLocaleDateString("en-NZ",{timeZone:"UTC",day:"numeric",month:"short",year:"numeric"});
+}
+function periodLabel(v){
+  if (v === "custom") return fmtDay(customFrom) + " to " + fmtDay(customTo);
+  return TEXT.headings[v];
+}
+function applyRange(){
+  var f = document.getElementById("dateFrom").value;
+  var t = document.getElementById("dateTo").value;
+  if (!f || !t) return;
+  if (f < dataMin()) f = dataMin();
+  if (t > TODAY) t = TODAY;
+  if (f > t){ var x = f; f = t; t = x; }
+  customFrom = f; customTo = t;
+  render();
 }
 function typeWarning(k){
   var w = ((D&&D.warnings)||[]).filter(function(x){ return x.indexOf(k+" ")===0; });
@@ -271,26 +314,7 @@ function summary(v){
     rows += "</tr>";
   }
 
-  return "<div class=section-h>"+TEXT.headings[v]+"</div><div class=card><table><thead>"+head+"</thead><tbody>"+rows+"</tbody></table></div>";
-}
-
-/* ---- monthly matrix ---- */
-function matrix(){
-  var cur = parseInt(TODAY.slice(5,7),10);
-  var head = "<tr><th>Rep</th>";
-  for (var m=1; m<=cur; m++) head += "<th>"+MN[m-1]+"</th>";
-  head += "</tr>";
-  var rows = "";
-  visibleReps().forEach(function(r){
-    rows += "<tr><td class=rep>"+r.name+"</td>";
-    for (var m=1; m<=cur; m++){
-      var mm = ("0"+m).slice(-2), a = D.year+"-"+mm+"-01", b = D.year+"-"+mm+"-31";
-      rows += "<td>"+sumRange(D.data.calls, r.id, a, b)+
-              "<span class=dim style=font-size:11px> &middot; "+sumRange(D.data.meetings, r.id, a, b)+"</span></td>";
-    }
-    rows += "</tr>";
-  });
-  return "<div class=section-h>"+TEXT.headings.matrix+"</div><div class=card><table><thead>"+head+"</thead><tbody>"+rows+"</tbody></table></div>";
+  return "<div class=section-h>"+periodLabel(v)+"</div><div class=card><table><thead>"+head+"</thead><tbody>"+rows+"</tbody></table></div>";
 }
 
 /* ---- selection handling ---- */
@@ -322,7 +346,7 @@ function unlockFlow(){
   apiGet({ pin: pin }).then(function(res){
     if (res.ok && res.pinValid && res.costs){
       PIN = pin; COSTS = res.costs;
-      try { localStorage.setItem("tl_pin", pin); } catch(e){}
+      try { sessionStorage.setItem("tl_pin", pin); } catch(e){}
       D = res; document.getElementById("stamp").textContent = D.fetched;
       render();
     } else {
@@ -332,7 +356,7 @@ function unlockFlow(){
 }
 function lockCosts(){
   PIN = null; COSTS = null;
-  try { localStorage.removeItem("tl_pin"); } catch(e){}
+  try { sessionStorage.removeItem("tl_pin"); } catch(e){}
   render();
 }
 function editFlow(){
@@ -400,7 +424,6 @@ function render(){
   document.getElementById("typeChips").innerHTML = tc;
 
   var html = summary(view);
-  if (view === "year") html += matrix();
   document.getElementById("main").innerHTML = html;
 
   var relevant = (D.warnings||[]).filter(function(w){
@@ -408,16 +431,25 @@ function render(){
   });
   document.getElementById("warnings").textContent = relevant.length ? "Data warnings: " + relevant.join(" | ") : "";
 
-  // add a lock link when unlocked
-  if (COSTS && !document.getElementById("lockLink")){
-    var a = document.createElement("a");
-    a.id = "lockLink"; a.href = "#"; a.className = "stamp no-print"; a.textContent = TEXT.lock;
-    a.onclick = function(ev){ ev.preventDefault(); lockCosts(); };
-    document.querySelector(".right").appendChild(a);
-  } else if (!COSTS){
-    var l = document.getElementById("lockLink");
-    if (l) l.remove();
+  // date range bar only on the custom tab
+  var db = document.getElementById("dateBar");
+  db.style.display = view === "custom" ? "" : "none";
+  if (view === "custom"){
+    var fi = document.getElementById("dateFrom"), ti = document.getElementById("dateTo");
+    fi.value = customFrom; ti.value = customTo;
+    fi.min = dataMin(); fi.max = TODAY; ti.min = dataMin(); ti.max = TODAY;
+    var priorYear = String(Number(D.year) - 1);
+    var hasHistory = D.yearMin && D.yearMin <= priorYear;
+    var hb = document.getElementById("histBtn");
+    hb.style.display = hasHistory ? "none" : "";
+    hb.textContent = "Include " + priorYear;
+    document.getElementById("histNote").textContent = hasHistory ? (D.yearMin + " onwards loaded") : "";
   }
+
+  // lock button only visible while costs are unlocked
+  var lockBtn = document.getElementById("lockBtn");
+  lockBtn.textContent = TEXT.lock;
+  lockBtn.style.display = COSTS ? "" : "none";
 }
 
 /* ---- events ---- */
@@ -433,12 +465,58 @@ document.getElementById("repChips").addEventListener("click", function(e){
   var r = e.target.getAttribute("data-rep");
   if (r) toggleRep(r);
 });
-document.getElementById("printBtn").addEventListener("click", function(){ window.print(); });
+document.getElementById("printBtn").addEventListener("click", function(){
+  // Build a meaningful default PDF filename via the document title,
+  // e.g. "Shane - Cost per call - Year to date - 7 Jul 2026"
+  var reps = visibleReps();
+  var who = reps.length === D.reps.length ? "Team" : reps.map(function(r){ return r.name.split(" ")[0]; }).join(", ");
+  var metric = COSTS ? costPerLabel().replace(" / ", " per ") : "Sales activity";
+  var period = periodLabel(view).replace(/\s*\(.*\)/, "");
+  var today = new Date().toLocaleDateString("en-NZ", { timeZone: "Pacific/Auckland", day: "numeric", month: "short", year: "numeric" });
+  var name = who + " - " + metric + " - " + period + " - " + today;
+
+  document.getElementById("printMeta").textContent =
+    who + " \u00B7 " + period + " \u00B7 Columns: " + selectedTypes.map(function(k){ return TYPE_LABELS[k]||k; }).join(", ") + " \u00B7 Generated " + today;
+
+  var prevTitle = document.title;
+  document.title = name;
+  var restore = function(){ document.title = prevTitle; window.removeEventListener("afterprint", restore); };
+  window.addEventListener("afterprint", restore);
+  setTimeout(restore, 60000); // fallback if afterprint never fires
+  window.print();
+});
+document.getElementById("lockBtn").addEventListener("click", lockCosts);
+document.getElementById("dateApply").addEventListener("click", applyRange);
+document.getElementById("histBtn").addEventListener("click", function(){
+  var hb = this;
+  var priorYear = String(Number(D.year) - 1);
+  if (hb.dataset.busy) return;
+  hb.dataset.busy = "1";
+  hb.textContent = "Loading " + priorYear + "\u2026";
+  document.getElementById("histNote").textContent = "First load takes about a minute, then it is cached for everyone.";
+  apiGet({ extended: 1, pin: PIN }).then(function(res){
+    delete hb.dataset.busy;
+    if (res.ok){
+      D = res;
+      if (res.costs) COSTS = res.costs;
+      document.getElementById("stamp").textContent = D.fetched;
+      render();
+    } else {
+      hb.textContent = "Include " + priorYear;
+      document.getElementById("histNote").textContent = "Could not load history: " + (res.error || "unknown error");
+    }
+  }).catch(function(){
+    delete hb.dataset.busy;
+    hb.textContent = "Include " + priorYear;
+    document.getElementById("histNote").textContent = "Could not load history, check your connection and try again.";
+  });
+});
 document.getElementById("costBtn").addEventListener("click", function(){ COSTS ? editFlow() : unlockFlow(); });
 document.getElementById("refreshBtn").addEventListener("click", function(){
   var btn = this;
   btn.textContent = "Refreshing\u2026";
-  apiGet({ fresh: 1, pin: PIN }).then(function(res){
+  var isExt = D && D.yearMin && D.yearMin < D.year;
+  apiGet({ fresh: 1, pin: PIN, extended: isExt ? 1 : null }).then(function(res){
     if (res.ok){
       D = res;
       if (res.costs) COSTS = res.costs;
