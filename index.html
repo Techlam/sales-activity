@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Techlam | Sales Activity &amp; Cost per Call</title>
+<script>
+/* ============================================================
+   SETUP AND DISPLAY SETTINGS
+   ============================================================ */
+
+// Paste your Apps Script web app URL here (Deploy > Manage deployments > URL).
+var API_URL = "https://script.google.com/macros/s/AKfycbx6dHztswJgd2AhvcjoKRWu5pknh1eOQAQSx1kq6gBMJO2JTUGxIAQXaLtk5UD9_LHuAQ/exec";
+
+// Default columns when someone first opens the page. Viewers can change
+// them with the on-page buttons, remembered per browser.
+var SHOW_TYPES = ["calls", "meetings"];
+
+var TYPE_LABELS = {
+  calls:    "Phone calls",
+  meetings: "Meetings",
+  emails:   "Emails",
+  tasks:    "Tasks",
+  notes:    "Notes"
+};
+
+var TEXT = {
+  title: "Sales Activity & Cost per Call",
+  eyebrow: "Sales Team",
+  totalCol: "Total",
+  costCol: "Loaded cost",
+  teamRow: "Team",
+  refresh: "Refresh data",
+  print: "Print / PDF",
+  unlock: "Unlock costs",
+  edit: "Edit costs",
+  lock: "Lock",
+  tabs: { today: "Today", week: "This week", month: "This month", year: "This year" },
+  headings: {
+    today: "Today",
+    week: "This week (Mon to today)",
+    month: "Month to date",
+    year: "Year to date",
+    matrix: "Monthly breakdown (phone calls &middot; meetings)"
+  }
+};
+
+/* ================= end of settings ================= */
+</script>
+<style>
+:root{
+  --paper:#F5F6F7; --card:#FFF; --ink:#231F20; --muted:#6E6E70;
+  --black:#231F20; --blue:#7C98AC; --bluedeep:#4F6B7F;
+  --yellow:#F7B334; --bronze:#857550; --line:#E1E3E5;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;padding:28px 20px 60px}
+.wrap{max-width:1020px;margin:0 auto}
+.logo{height:56px;display:block;margin-bottom:18px}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:6px}
+.eyebrow b{color:var(--yellow);font-weight:700;letter-spacing:0}
+h1{font-size:clamp(22px,3.4vw,32px);font-weight:700;letter-spacing:-.01em;color:var(--black)}
+.chev{display:flex;gap:4px;margin:14px 0 0}
+.chev span{width:36px;height:9px;transform:skewX(-32deg)}
+.chev span:nth-child(1){background:var(--blue)}
+.chev span:nth-child(2){background:var(--yellow)}
+.chev span:nth-child(3){background:var(--black)}
+.chev span:nth-child(4){background:var(--bronze)}
+.topbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-top:18px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--card);padding:8px 16px;border-radius:3px;font:500 13px "Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent}
+.tab.active{background:var(--black);border-color:var(--black);color:#fff;border-bottom:3px solid var(--yellow);font-weight:700}
+.right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.stamp{font-size:12px;color:var(--muted)}
+.btn{border:none;background:var(--yellow);color:var(--black);padding:9px 18px;border-radius:3px;font:700 13px "Helvetica Neue",Helvetica,Arial,sans-serif;cursor:pointer;text-decoration:none;display:inline-block}
+.btn:hover{background:#E5A428}
+.btn.ghost{background:var(--card);border:1px solid var(--line);color:var(--ink);font-weight:500}
+.selbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+.selbar .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;min-width:64px}
+.chip{border:1px solid var(--line);background:var(--card);padding:6px 14px;border-radius:14px;font:500 12px "Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--muted);cursor:pointer}
+.chip.on{background:var(--black);border-color:var(--black);color:#fff;font-weight:700}
+.chip.blocked{opacity:.45;cursor:not-allowed;text-decoration:line-through}
+.card{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--yellow);border-radius:3px;padding:4px 0;overflow-x:auto;margin-top:14px}
+table{width:100%;border-collapse:collapse;min-width:620px}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--bluedeep);font-weight:700;text-align:right;padding:12px 14px;border-bottom:2px solid var(--black)}
+th:first-child,td:first-child{text-align:left;padding-left:18px}
+td{padding:11px 14px;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#FAFBFC}
+td.rep{font-weight:500}
+tr.total td{font-weight:700;background:#F5F6F7;border-top:2px solid var(--black)}
+td.dim,span.dim{color:var(--muted)}
+.cpc{color:var(--black);font-weight:700}
+.warn{font-size:12px;color:var(--bronze);margin-top:8px}
+.section-h{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--black);margin:26px 0 0}
+.section-h::before{content:"";display:inline-block;width:14px;height:9px;background:var(--yellow);transform:skewX(-32deg);margin-right:9px}
+.loading{display:flex;flex-direction:column;align-items:center;gap:14px;padding:60px 0;color:var(--muted);font-size:14px}
+.loading .chev{margin:0}
+.loading .chev span{animation:pulse 1.1s infinite ease-in-out}
+.loading .chev span:nth-child(2){animation-delay:.15s}
+.loading .chev span:nth-child(3){animation-delay:.3s}
+.loading .chev span:nth-child(4){animation-delay:.45s}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+.errbox{background:#FFF;border:1px solid var(--line);border-top:4px solid var(--yellow);border-radius:3px;padding:22px;margin-top:16px;line-height:1.5}
+.modal-bg{position:fixed;inset:0;background:rgba(35,31,32,.55);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal{background:#FFF;border-radius:4px;border-top:4px solid var(--yellow);padding:24px;width:min(420px,92vw)}
+.modal h2{font-size:16px;margin-bottom:14px}
+.modal .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.modal label{font-size:13px;font-weight:500}
+.modal input{border:1px solid var(--line);border-radius:3px;padding:8px 10px;font:400 14px "Helvetica Neue",Helvetica,Arial,sans-serif;width:140px;text-align:right}
+.modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal .msg{font-size:12px;color:var(--bronze);min-height:16px;margin-top:8px}
+@media print{
+  .no-print{display:none !important}
+  body{background:#fff;padding:0}
+  .card{border:1px solid #bbb;border-top:3px solid #bbb;overflow:visible}
+  table{min-width:0}
+  tbody tr:hover td{background:transparent}
+  .wrap{max-width:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="logo" src="https://techlam.nz/wp-content/themes/techlam/img/Techlam_Logo-2025.svg" alt="Techlam" onerror="this.style.display='none'">
+    <div class="eyebrow"><b>//</b> <span id="eyebrowText"></span></div>
+    <h1 id="pageTitle"></h1>
+    <div class="chev" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div class="topbar no-print">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-v="today"></button>
+        <button class="tab" data-v="week"></button>
+        <button class="tab" data-v="month"></button>
+        <button class="tab" data-v="year"></button>
+      </div>
+      <div class="right">
+        <span class="stamp">Data as at <span id="stamp">&hellip;</span> NZT</span>
+        <button class="btn ghost" id="printBtn"></button>
+        <button class="btn ghost" id="costBtn"></button>
+        <button class="btn" id="refreshBtn"></button>
+      </div>
+    </div>
+    <div class="selbar no-print"><span class="lbl">Team</span><span id="repChips"></span></div>
+    <div class="selbar no-print"><span class="lbl">Columns</span><span id="typeChips"></span></div>
+  </header>
+  <div id="main"><div class="loading"><div class="chev"><span style="background:var(--blue)"></span><span style="background:var(--yellow)"></span><span style="background:var(--black)"></span><span style="background:var(--bronze)"></span></div>Loading live activity from HubSpot&hellip;</div></div>
+  <p class="warn no-print" id="warnings"></p>
+</div>
+<div id="modalHost"></div>
+
+<script>
+var ALL_TYPES = ["calls", "meetings", "emails", "tasks", "notes"];
+var D = null;            // API payload
+var COSTS = null;        // {ownerId: annual}, only present when unlocked
+var PIN = null;
+var view = "today";
+var selectedTypes = SHOW_TYPES.slice();
+var selectedReps = null; // null = all; otherwise array of ownerIds
+
+try {
+  var sc = JSON.parse(localStorage.getItem("tl_cols") || "null");
+  if (sc && sc.length) selectedTypes = sc.filter(function(k){ return ALL_TYPES.indexOf(k) >= 0; });
+  PIN = localStorage.getItem("tl_pin") || null;
+} catch (e) {}
+
+/* ---- API ---- */
+function apiGet(params){
+  var qs = Object.keys(params).filter(function(k){return params[k]!=null;}).map(function(k){return k+"="+encodeURIComponent(params[k]);}).join("&");
+  return fetch(API_URL + (qs ? "?"+qs : "")).then(function(r){ return r.json(); });
+}
+function apiPost(body){
+  return fetch(API_URL, { method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); });
+}
+function load(fresh){
+  if (API_URL.indexOf("PASTE_") === 0){
+    document.getElementById("main").innerHTML = '<div class="errbox"><strong>Setup needed.</strong><br>Open index.html in the GitHub repo and paste the Apps Script web app URL into API_URL at the top of the file.</div>';
+    return;
+  }
+  apiGet({ fresh: fresh ? 1 : null, pin: PIN })
+    .then(function(res){
+      if (!res.ok) throw new Error(res.error || "Unknown API error");
+      D = res;
+      if (res.pinValid === false){ PIN = null; COSTS = null; try{localStorage.removeItem("tl_pin");}catch(e){} }
+      if (res.costs) COSTS = res.costs;
+      if (selectedReps === null) selectedReps = D.reps.map(function(r){ return r.id; });
+      document.getElementById("stamp").textContent = D.fetched;
+      render();
+    })
+    .catch(function(err){
+      document.getElementById("main").innerHTML = '<div class="errbox"><strong>Could not load data.</strong><br>' + String(err).replace(/</g,"&lt;") + '<br><br><button class="btn" onclick="load(false)">Retry</button></div>';
+    });
+}
+
+/* ---- dates (NZ time) ---- */
+function nzToday(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"Pacific/Auckland"}).format(new Date()); }
+function d(s){ return new Date(s+"T00:00:00Z"); }
+function iso(x){ return x.toISOString().slice(0,10); }
+var TODAY = nzToday();
+var WEEK_START = (function(){ var t=d(TODAY); var dow=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-dow); return iso(t); })();
+var MONTH_START = TODAY.slice(0,8)+"01";
+var YEAR_START = TODAY.slice(0,5)+"01-01";
+function workingDays(a,b){ var c=0,t=d(a),e=d(b); while(t<=e){ var w=t.getUTCDay(); if(w>=1&&w<=5)c++; t.setUTCDate(t.getUTCDate()+1);} return c; }
+
+/* ---- helpers ---- */
+function sumRange(map,id,a,b){ var m=(map||{})[id]||{}, n=0, k; for(k in m){ if(k>=a&&k<=b) n+=m[k]; } return n; }
+function fmtN(v){ return (v||0).toLocaleString("en-NZ"); }
+function fmtC(v){ return v==null ? "\u2013" : "$"+Math.round(v).toLocaleString("en-NZ"); }
+var MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function bounds(v){
+  if(v==="today") return [TODAY,TODAY];
+  if(v==="week")  return [WEEK_START,TODAY];
+  if(v==="month") return [MONTH_START,TODAY];
+  return [YEAR_START,TODAY];
+}
+function typeWarning(k){
+  var w = ((D&&D.warnings)||[]).filter(function(x){ return x.indexOf(k+" ")===0; });
+  return w.length ? w[0] : null;
+}
+function visibleReps(){ return D.reps.filter(function(r){ return selectedReps.indexOf(r.id) >= 0; }); }
+function costOf(id){ return (COSTS && COSTS[id] != null) ? Number(COSTS[id]) : null; }
+
+// Cost heading follows what is selected.
+function costPerLabel(){
+  var s = selectedTypes.slice().sort().join(",");
+  if (s === "calls") return "Cost / phone call";
+  if (s === "meetings") return "Cost / meeting";
+  if (s === "calls,meetings") return "Cost / call";
+  return "Cost / activity";
+}
+
+/* ---- summary table ---- */
+function summary(v){
+  var b = bounds(v), wd = workingDays(b[0], b[1]);
+  var unlocked = !!COSTS;
+  var head = "<tr><th>Rep</th>";
+  selectedTypes.forEach(function(k){ head += "<th>"+(TYPE_LABELS[k]||k)+"</th>"; });
+  head += "<th>"+TEXT.totalCol+"</th>";
+  if (unlocked) head += "<th>"+TEXT.costCol+"</th><th>"+costPerLabel()+"</th>";
+  head += "</tr>";
+
+  var reps = visibleReps();
+  var rows = "", tots = {}, tAll = 0, tcost = 0;
+  selectedTypes.forEach(function(k){ tots[k] = 0; });
+
+  reps.forEach(function(r){
+    var cnt = {}, tot = 0;
+    selectedTypes.forEach(function(k){
+      var n = sumRange(D.data[k], r.id, b[0], b[1]);
+      cnt[k] = n; tots[k] += n; tot += n;
+    });
+    tAll += tot;
+    var annual = costOf(r.id);
+    var cost = (unlocked && annual != null) ? (annual / D.wdPerYear) * wd : null;
+    if (cost != null) tcost += cost;
+    var cp = (cost != null && tot > 0) ? cost / tot : null;
+
+    rows += "<tr><td class=rep>"+r.name+"</td>";
+    selectedTypes.forEach(function(k){ rows += "<td>"+fmtN(cnt[k])+"</td>"; });
+    rows += "<td>"+fmtN(tot)+"</td>";
+    if (unlocked) rows += "<td class=dim>"+fmtC(cost)+"</td><td class=cpc>"+(cp!=null?fmtC(cp):"\u2013")+"</td>";
+    rows += "</tr>";
+  });
+
+  if (reps.length > 1){
+    rows += "<tr class=total><td class=rep>"+TEXT.teamRow+"</td>";
+    selectedTypes.forEach(function(k){ rows += "<td>"+fmtN(tots[k])+"</td>"; });
+    rows += "<td>"+fmtN(tAll)+"</td>";
+    if (unlocked) rows += "<td class=dim>"+fmtC(tcost)+"</td><td class=cpc>"+((tcost&&tAll)?fmtC(tcost/tAll):"\u2013")+"</td>";
+    rows += "</tr>";
+  }
+
+  return "<div class=section-h>"+TEXT.headings[v]+"</div><div class=card><table><thead>"+head+"</thead><tbody>"+rows+"</tbody></table></div>";
+}
+
+/* ---- monthly matrix ---- */
+function matrix(){
+  var cur = parseInt(TODAY.slice(5,7),10);
+  var head = "<tr><th>Rep</th>";
+  for (var m=1; m<=cur; m++) head += "<th>"+MN[m-1]+"</th>";
+  head += "</tr>";
+  var rows = "";
+  visibleReps().forEach(function(r){
+    rows += "<tr><td class=rep>"+r.name+"</td>";
+    for (var m=1; m<=cur; m++){
+      var mm = ("0"+m).slice(-2), a = D.year+"-"+mm+"-01", b = D.year+"-"+mm+"-31";
+      rows += "<td>"+sumRange(D.data.calls, r.id, a, b)+
+              "<span class=dim style=font-size:11px> &middot; "+sumRange(D.data.meetings, r.id, a, b)+"</span></td>";
+    }
+    rows += "</tr>";
+  });
+  return "<div class=section-h>"+TEXT.headings.matrix+"</div><div class=card><table><thead>"+head+"</thead><tbody>"+rows+"</tbody></table></div>";
+}
+
+/* ---- selection handling ---- */
+function toggleType(k){
+  if (typeWarning(k)) return;
+  var i = selectedTypes.indexOf(k);
+  if (i >= 0) { if (selectedTypes.length > 1) selectedTypes.splice(i, 1); }
+  else selectedTypes = ALL_TYPES.filter(function(t){ return selectedTypes.indexOf(t) >= 0 || t === k; });
+  try { localStorage.setItem("tl_cols", JSON.stringify(selectedTypes)); } catch(e){}
+  render();
+}
+function toggleRep(id){
+  if (id === "all"){ selectedReps = D.reps.map(function(r){ return r.id; }); render(); return; }
+  var allOn = selectedReps.length === D.reps.length;
+  if (allOn){
+    selectedReps = [id]; // from All, clicking a name filters to that person
+  } else {
+    var i = selectedReps.indexOf(id);
+    if (i >= 0){ if (selectedReps.length > 1) selectedReps.splice(i,1); }
+    else selectedReps.push(id);
+  }
+  render();
+}
+
+/* ---- costs: unlock and edit ---- */
+function unlockFlow(){
+  var pin = prompt("Enter the cost PIN:");
+  if (pin == null || pin === "") return;
+  apiGet({ pin: pin }).then(function(res){
+    if (res.ok && res.pinValid && res.costs){
+      PIN = pin; COSTS = res.costs;
+      try { localStorage.setItem("tl_pin", pin); } catch(e){}
+      D = res; document.getElementById("stamp").textContent = D.fetched;
+      render();
+    } else {
+      alert("Incorrect PIN.");
+    }
+  }).catch(function(){ alert("Could not verify PIN, check your connection."); });
+}
+function lockCosts(){
+  PIN = null; COSTS = null;
+  try { localStorage.removeItem("tl_pin"); } catch(e){}
+  render();
+}
+function editFlow(){
+  var host = document.getElementById("modalHost");
+  var rowsHtml = "";
+  D.reps.forEach(function(r){
+    rowsHtml += '<div class="row"><label>'+r.name+'</label><input type="number" step="0.01" min="1" data-id="'+r.id+'" value="'+(costOf(r.id)!=null?costOf(r.id):"")+'"></div>';
+  });
+  host.innerHTML =
+    '<div class="modal-bg" id="modalBg"><div class="modal">'+
+    '<h2>Edit annual loaded costs ($)</h2>'+rowsHtml+
+    '<div class="msg" id="modalMsg"></div>'+
+    '<div class="actions"><button class="btn ghost" id="mCancel">Cancel</button><button class="btn" id="mSave">Save</button></div>'+
+    '</div></div>';
+  document.getElementById("mCancel").onclick = function(){ host.innerHTML = ""; };
+  document.getElementById("mSave").onclick = function(){
+    var costs = {};
+    var inputs = host.querySelectorAll("input[data-id]");
+    for (var i=0; i<inputs.length; i++){
+      var v = Number(inputs[i].value);
+      if (!isFinite(v) || v <= 0){ document.getElementById("modalMsg").textContent = "All figures must be positive numbers."; return; }
+      costs[inputs[i].getAttribute("data-id")] = v;
+    }
+    document.getElementById("modalMsg").textContent = "Saving\u2026";
+    apiPost({ action:"setcosts", pin: PIN, costs: costs }).then(function(res){
+      if (res.ok){ COSTS = res.costs; host.innerHTML = ""; render(); }
+      else document.getElementById("modalMsg").textContent = res.error || "Save failed.";
+    }).catch(function(){ document.getElementById("modalMsg").textContent = "Save failed, check your connection."; });
+  };
+}
+
+/* ---- render ---- */
+function render(){
+  if (!D) return;
+  var tabs = document.querySelectorAll(".tab");
+  for (var i=0; i<tabs.length; i++){
+    var key = tabs[i].getAttribute("data-v");
+    tabs[i].textContent = TEXT.tabs[key];
+    tabs[i].classList.toggle("active", key === view);
+  }
+  document.getElementById("pageTitle").textContent = TEXT.title;
+  document.getElementById("eyebrowText").textContent = TEXT.eyebrow;
+  document.getElementById("refreshBtn").textContent = TEXT.refresh;
+  document.getElementById("printBtn").textContent = TEXT.print;
+  document.getElementById("costBtn").textContent = COSTS ? TEXT.edit : TEXT.unlock;
+  document.getElementById("costBtn").title = COSTS ? "Change the annual loaded cost figures (PIN already entered)" : "Enter the PIN to show cost columns";
+
+  // rep chips
+  var allOn = selectedReps.length === D.reps.length;
+  var rc = '<button class="chip'+(allOn?' on':'')+'" data-rep="all">All</button> ';
+  D.reps.forEach(function(r){
+    var first = r.name.split(" ")[0];
+    rc += '<button class="chip'+(selectedReps.indexOf(r.id)>=0 && !allOn ?' on':'')+(allOn?'':'')+'" data-rep="'+r.id+'">'+first+'</button> ';
+  });
+  document.getElementById("repChips").innerHTML = rc;
+
+  // column chips
+  var tc = "";
+  ALL_TYPES.forEach(function(k){
+    var w = typeWarning(k);
+    var cls = "chip" + (selectedTypes.indexOf(k) >= 0 ? " on" : "") + (w ? " blocked" : "");
+    var title = w ? "Not available: the HubSpot app has not been granted access to " + k : "Show or hide the " + (TYPE_LABELS[k]||k) + " column";
+    tc += '<button class="'+cls+'" data-k="'+k+'" title="'+title+'">'+(TYPE_LABELS[k]||k)+'</button> ';
+  });
+  document.getElementById("typeChips").innerHTML = tc;
+
+  var html = summary(view);
+  if (view === "year") html += matrix();
+  document.getElementById("main").innerHTML = html;
+
+  var relevant = (D.warnings||[]).filter(function(w){
+    return selectedTypes.some(function(k){ return w.indexOf(k+" ") === 0; });
+  });
+  document.getElementById("warnings").textContent = relevant.length ? "Data warnings: " + relevant.join(" | ") : "";
+
+  // add a lock link when unlocked
+  if (COSTS && !document.getElementById("lockLink")){
+    var a = document.createElement("a");
+    a.id = "lockLink"; a.href = "#"; a.className = "stamp no-print"; a.textContent = TEXT.lock;
+    a.onclick = function(ev){ ev.preventDefault(); lockCosts(); };
+    document.querySelector(".right").appendChild(a);
+  } else if (!COSTS){
+    var l = document.getElementById("lockLink");
+    if (l) l.remove();
+  }
+}
+
+/* ---- events ---- */
+document.getElementById("tabs").addEventListener("click", function(e){
+  var v = e.target.getAttribute("data-v");
+  if (v){ view = v; render(); }
+});
+document.getElementById("typeChips").addEventListener("click", function(e){
+  var k = e.target.getAttribute("data-k");
+  if (k) toggleType(k);
+});
+document.getElementById("repChips").addEventListener("click", function(e){
+  var r = e.target.getAttribute("data-rep");
+  if (r) toggleRep(r);
+});
+document.getElementById("printBtn").addEventListener("click", function(){ window.print(); });
+document.getElementById("costBtn").addEventListener("click", function(){ COSTS ? editFlow() : unlockFlow(); });
+document.getElementById("refreshBtn").addEventListener("click", function(){
+  var btn = this;
+  btn.textContent = "Refreshing\u2026";
+  apiGet({ fresh: 1, pin: PIN }).then(function(res){
+    if (res.ok){
+      D = res;
+      if (res.costs) COSTS = res.costs;
+      document.getElementById("stamp").textContent = D.fetched;
+      render();
+    }
+    btn.textContent = TEXT.refresh;
+  }).catch(function(){ btn.textContent = TEXT.refresh; });
+});
+
+load(false);
+</script>
+</body>
+</html>
